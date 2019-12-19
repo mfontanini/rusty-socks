@@ -1,0 +1,15 @@
+[package]
+name = "rusty-socks"
+version = "0.1.0"
+authors = ["matias"]
+edition = "2018"
+
+[dependencies]
+async-trait = "0.1"
+byteorder = "1.2"
+enum-primitive-derive = "0.1"
+futures-await-test = "0.3"
+merge-io = "0.3.0"
+num-traits = "0.1"
+tokio = { version = "0.2", features = ["full"] }
+tokio-io = "0.1"
