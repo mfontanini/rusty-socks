@@ -1,9 +1,12 @@
 use std::io;
-use tokio::io::{AsyncRead, AsyncWrite};
+use tokio::io::{AsyncRead, AsyncWrite, BufReader, BufWriter};
+use tokio::net::TcpStream;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 
 // Based on merge-io crate, adapted to tokio::io::{AsyncRead, AsyncWrite} 
+
+pub trait ReadWriteStream: AsyncRead + AsyncWrite + Unpin + Send {}
 
 #[derive(Debug)]
 pub struct MergeIO<R, W>
@@ -20,6 +23,18 @@ where
     R: AsyncRead + Unpin,
     W: AsyncWrite + Unpin,
 {
+    pub fn buffered<Reader, Writer>(reader: Reader, writer: Writer)
+        -> MergeIO<BufReader<Reader>, BufWriter<Writer>>
+    where
+        Reader: AsyncRead + Unpin,
+        Writer: AsyncWrite + Unpin
+    {
+        MergeIO::new(
+            BufReader::new(reader),
+            BufWriter::new(writer)
+        )
+    }
+
     pub fn new(reader: R, writer: W) -> Self {
         MergeIO { reader, writer }
     }
@@ -47,8 +62,8 @@ where
 
 impl<R, W> AsyncRead for MergeIO<R, W>
 where
-    R: AsyncRead + Unpin,
-    W: AsyncWrite + Unpin,
+    R: AsyncRead + Unpin + Send,
+    W: AsyncWrite + Unpin + Send,
 {
     fn poll_read(self: Pin<&mut Self>, cx: &mut Context<'_>, buf: &mut [u8])
         -> Poll<io::Result<usize>>
@@ -59,8 +74,8 @@ where
 
 impl<R, W> AsyncWrite for MergeIO<R, W>
 where
-    R: AsyncRead + Unpin,
-    W: AsyncWrite + Unpin,
+    R: AsyncRead + Unpin + Send,
+    W: AsyncWrite + Unpin + Send,
 {
     fn poll_write(self: Pin<&mut Self>, cx: &mut Context<'_>, buf: &[u8]) -> Poll<io::Result<usize>> {
         AsyncWrite::poll_write(Pin::new(&mut self.get_mut().writer), cx, buf)
@@ -73,4 +88,11 @@ where
     fn poll_shutdown(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
         AsyncWrite::poll_shutdown(Pin::new(&mut self.get_mut().writer), cx)
     }
+}
+
+impl<R, W> ReadWriteStream for MergeIO<R, W>
+where
+    R: AsyncRead + Unpin + Send,
+    W: AsyncWrite + Unpin + Send
+{
 }
