@@ -5,7 +5,6 @@ use async_trait::async_trait;
 use num_traits::FromPrimitive;
 use crate::error::Error;
 use tokio::prelude::*;
-//use tokio_byteorder::{BigEndian, AsyncReadBytesExt, AsyncWriteBytesExt};
 
 // Common types
 
@@ -117,7 +116,7 @@ impl Parseable for ClientRequest {
         let version = input.read_u8().await?;
         let command = match input.read_u8().await? {
             COMMAND_CONNECT => Ok(Command::Connect),
-            _ => Err(Error::MalformedMessage(String::from("Unsupported command")))
+            value => Err(Error::MalformedMessage(format!("Unsupported command {}", value)))
         }?;
         // Skip reserved byte
         input.read_u8().await?;
@@ -200,6 +199,7 @@ impl Writeable for RequestResponse {
             }
         };
         output.write_u16(self.port).await?;
+        output.flush().await?;
         Ok(output)
     }
 }

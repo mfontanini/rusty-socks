@@ -1,26 +1,26 @@
 use std::net::{SocketAddr, IpAddr, Ipv4Addr};
 use log::info;
+use futures::try_join;
 use tokio::net::TcpStream;
+use tokio::io::{copy, split, BufReader, BufWriter};
 use crate::context::Context;
 use crate::error::Error;
 use crate::messages::*;
 use crate::stream::ReadWriteStream;
 use crate::stream::MergeIO;
 
-pub enum State<Stream>
-where
-    Stream: ReadWriteStream
+pub enum State
 {
-    AwaitingHello(Stream),
-    AwaitingClientRequest(Stream),
-    Proxying(Stream, Stream),
+    AwaitingHello(Box<dyn ReadWriteStream>),
+    AwaitingClientRequest(Box<dyn ReadWriteStream>),
+    Proxying(Box<dyn ReadWriteStream>, Box<dyn ReadWriteStream>),
     Finished
 }
 
-impl<Stream> State<Stream>
-where Stream: ReadWriteStream
-{
-    pub fn new(stream: Stream) -> State<Stream> {
+impl State {
+    const VALID_VERSIONS: [u8; 2] = [4, 5];
+
+    pub fn new(stream: Box<dyn ReadWriteStream>) -> State {
         State::AwaitingHello(stream)
     }
 
@@ -43,12 +43,12 @@ where Stream: ReadWriteStream
         
     }
 
-    async fn process_await_hello(stream: Stream, _context: &Context)
+    async fn process_await_hello(stream: Box<dyn ReadWriteStream>, _context: &Context)
         -> Result<Self, Error>
     {
         let (request, stream) = HelloRequest::new(stream).await?;
-        if request.version != 5 {
-            return Err(Error::MalformedMessage(String::from("Unsupported socks version")));
+        if !State::VALID_VERSIONS.contains(&request.version) {
+            return Err(Error::MalformedMessage(format!("Unsupported socks version {}", request.version)));
         }
         if request.methods.len() == 0 {
             return Err(Error::MalformedMessage(String::from("No methods provided")));
@@ -61,11 +61,14 @@ where Stream: ReadWriteStream
         Ok(State::AwaitingClientRequest(stream)) 
     }
 
-    async fn process_await_client_request(client_stream: Stream, _context: &Context)
+    async fn process_await_client_request(
+        client_stream: Box<dyn ReadWriteStream>,
+        _context: &Context
+    )
         -> Result<Self, Error>
     {
         let (request, client_stream) = ClientRequest::new(client_stream).await?;
-        if request.version != 5 {
+        if !State::VALID_VERSIONS.contains(&request.version) {
             return Err(Error::MalformedMessage(String::from("Invalid socks version")))
         }
         let endpoint = match request.address {
@@ -73,6 +76,7 @@ where Stream: ReadWriteStream
                 SocketAddr::new(address, request.port)
             }
         };
+        println!("{:?}", endpoint);
         let output_stream = TcpStream::connect(endpoint).await?;
         let response = RequestResponse::new(
             request.version,
@@ -82,14 +86,28 @@ where Stream: ReadWriteStream
         );
         let client_stream = response.write(client_stream).await?;
 
-        let (reader, writer) = output_stream.split();
-        Ok(Self::Proxying(client_stream, MergeIO::buffered(reader, writer)))
+        let (reader, writer) = split(output_stream);
+        let output_stream = MergeIO::new(
+            BufReader::new(reader),
+            writer
+            //BufWriter::new(writer)
+        );
+        Ok(Self::Proxying(client_stream, Box::new(output_stream)))
     }
 
-    async fn do_proxy(client_stream: Stream, output_stream: Stream)
+    async fn do_proxy(
+        client_stream: Box<dyn ReadWriteStream>,
+        output_stream: Box<dyn ReadWriteStream>
+    )
         -> Result<Self, Error>
     {
-        // TODO: nope
-        Err(Error::Finished)
+        // Split and proxy them
+        let (mut client_read, mut client_write) = split(client_stream);
+        let (mut output_read, mut output_write) = split(output_stream);
+        let client_to_output = copy(&mut client_read, &mut output_write);
+        let output_to_client = copy(&mut output_read, &mut client_write);
+        try_join!(client_to_output, output_to_client)?;
+        println!("Finished proxying");
+        Ok(Self::Finished)
     }
 }

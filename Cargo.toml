@@ -8,7 +8,9 @@ edition = "2018"
 async-trait = "^0.1"
 enum-primitive-derive = "^0.1"
 log = "^0.4"
+futures = { version = "^0.3", features= ["async-await"] }
 futures-await-test = "^0.3"
 num-traits = "^0.1"
+pretty_env_logger = "^0.3"
 tokio = { version = "^0.2", features = ["full"] }
 tokio-io = "^0.1"

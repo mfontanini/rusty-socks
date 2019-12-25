@@ -1,12 +1,11 @@
 use std::io;
-use tokio::io::{AsyncRead, AsyncWrite, BufReader, BufWriter};
-use tokio::net::TcpStream;
+use tokio::io::{AsyncRead, AsyncWrite};
 use std::pin::Pin;
 use std::task::{Context, Poll};
 
 // Based on merge-io crate, adapted to tokio::io::{AsyncRead, AsyncWrite} 
 
-pub trait ReadWriteStream: AsyncRead + AsyncWrite + Unpin + Send {}
+pub trait ReadWriteStream: AsyncRead + AsyncWrite + Unpin + Send { }
 
 #[derive(Debug)]
 pub struct MergeIO<R, W>
@@ -23,40 +22,11 @@ where
     R: AsyncRead + Unpin,
     W: AsyncWrite + Unpin,
 {
-    pub fn buffered<Reader, Writer>(reader: Reader, writer: Writer)
-        -> MergeIO<BufReader<Reader>, BufWriter<Writer>>
-    where
-        Reader: AsyncRead + Unpin,
-        Writer: AsyncWrite + Unpin
-    {
-        MergeIO::new(
-            BufReader::new(reader),
-            BufWriter::new(writer)
-        )
-    }
-
     pub fn new(reader: R, writer: W) -> Self {
-        MergeIO { reader, writer }
-    }
-
-    pub fn reader(&self) -> &R {
-        &self.reader
-    }
-
-    pub fn writer(&self) -> &W {
-        &self.writer
-    }
-
-    pub fn reader_mut(&mut self) -> &mut R {
-        &mut self.reader
-    }
-
-    pub fn writer_mut(&mut self) -> &mut W {
-        &mut self.writer
-    }
-
-    pub fn into_inner(self) -> (R, W) {
-        (self.reader, self.writer)
+        MergeIO {
+            reader: reader,
+            writer: writer
+        }
     }
 }
 
