@@ -18,8 +18,6 @@ pub enum State
 }
 
 impl State {
-    const VALID_VERSIONS: [u8; 2] = [4, 5];
-
     pub fn new(stream: Box<dyn ReadWriteStream>) -> State {
         State::AwaitingHello(stream)
     }
@@ -54,7 +52,7 @@ impl State {
         -> Result<Self, Error>
     {
         let (request, stream) = HelloRequest::new(stream).await?;
-        if !State::VALID_VERSIONS.contains(&request.version) {
+        if request.version != 5 {
             return Err(Error::MalformedMessage(format!("Unsupported socks version {}", request.version)));
         }
         if request.methods.len() == 0 {
@@ -62,7 +60,8 @@ impl State {
         }
         // TODO: pick one based on context
         let method = request.methods[0];
-        info!("Received new client using method {}", method);
+        
+        info!("Received new client using auth method {}", method);
         let response = HelloResponse::new(request.version, method);
         let stream = response.write(stream).await?;
         Ok(State::AwaitingClientRequest(stream)) 
@@ -75,7 +74,7 @@ impl State {
         -> Result<Self, Error>
     {
         let (request, client_stream) = ClientRequest::new(client_stream).await?;
-        if !State::VALID_VERSIONS.contains(&request.version) {
+        if request.version != 5 {
             return Err(Error::MalformedMessage(String::from("Invalid socks version")))
         }
         let endpoint = match request.address {
@@ -83,6 +82,7 @@ impl State {
                 SocketAddr::new(address, request.port)
             }
         };
+        info!("Establishing connection with {}", endpoint);
         let output_stream = TcpStream::connect(endpoint).await?;
         let response = RequestResponse::new(
             request.version,
