@@ -96,8 +96,7 @@ impl State {
         let (reader, writer) = split(output_stream);
         let output_stream = MergeIO::new(
             BufReader::new(reader),
-            writer
-            //BufWriter::new(writer)
+            BufWriter::new(writer)
         );
         Ok(Self::Proxying(client_stream, Box::new(output_stream)))
     }
@@ -147,7 +146,7 @@ impl Proxier {
                 return Err(Error::Finished);
             }
             self.writer.write_all(&self.buffer[0..bytes_read]).await?;
-            self.writer.flush();
+            self.writer.flush().await?;
         }
     } 
 }

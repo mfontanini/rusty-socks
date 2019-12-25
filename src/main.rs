@@ -16,8 +16,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             let (reader, writer) = split(stream);
             let stream = MergeIO::new(
                 BufReader::new(reader),
-                writer
-                //BufWriter::new(writer)
+                BufWriter::new(writer)
             );
             let mut state = State::new(Box::new(stream));
             loop {

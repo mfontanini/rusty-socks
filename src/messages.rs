@@ -157,6 +157,7 @@ impl Writeable for HelloResponse {
     {
         output.write_u8(self.version).await?;
         output.write_u8(self.method as u8).await?;
+        output.flush().await?;
         Ok(output)
     }
 }
