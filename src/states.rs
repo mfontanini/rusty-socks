@@ -2,7 +2,8 @@ use std::net::{SocketAddr, IpAddr, Ipv4Addr};
 use log::info;
 use futures::try_join;
 use tokio::net::TcpStream;
-use tokio::io::{copy, split, BufReader, BufWriter};
+use tokio::prelude::*;
+use tokio::io::{split, BufReader, BufWriter, ReadHalf, WriteHalf};
 use crate::context::Context;
 use crate::error::Error;
 use crate::messages::*;
@@ -107,12 +108,46 @@ impl State {
     )
         -> Result<Self, Error>
     {
-        // Split and proxy them
-        let (mut client_read, mut client_write) = split(client_stream);
-        let (mut output_read, mut output_write) = split(output_stream);
-        let client_to_output = copy(&mut client_read, &mut output_write);
-        let output_to_client = copy(&mut output_read, &mut client_write);
-        try_join!(client_to_output, output_to_client)?;
+        let (client_reader, client_writer) = split(client_stream);
+        let (output_reader, output_writer) = split(output_stream);
+        let mut client_proxier = Proxier::new(client_reader, output_writer);
+        let mut output_proxier = Proxier::new(output_reader, client_writer);
+        // We don't really care what happened, we're done anyway
+        let _result = try_join!(
+            client_proxier.run(),
+            output_proxier.run()
+        );
         Ok(Self::Finished)
     }
+}
+
+struct Proxier {
+    reader: ReadHalf<Box<dyn ReadWriteStream>>,
+    writer: WriteHalf<Box<dyn ReadWriteStream>>,
+    buffer: [u8; 4096]
+}
+
+impl Proxier {
+    fn new(
+        reader: ReadHalf<Box<dyn ReadWriteStream>>,
+        writer: WriteHalf<Box<dyn ReadWriteStream>>
+    ) -> Proxier
+    {
+        Proxier {
+            reader,
+            writer,
+            buffer: [0; 4096]
+        }
+    }
+
+    async fn run(&mut self) -> Result<(), Error> {
+        loop {
+            let bytes_read = self.reader.read(&mut self.buffer).await?;
+            if bytes_read == 0 {
+                return Err(Error::Finished);
+            }
+            self.writer.write_all(&self.buffer[0..bytes_read]).await?;
+            self.writer.flush();
+        }
+    } 
 }
