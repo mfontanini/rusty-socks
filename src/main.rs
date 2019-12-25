@@ -1,3 +1,4 @@
+use log::warn;
 use tokio::net::TcpListener;
 use tokio::io::{BufReader, BufWriter, split};
 use rusty_socks::context::Context;
@@ -21,7 +22,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             );
             let mut state = State::new(Box::new(stream));
             loop {
-               state = state.process(&context).await.unwrap();
+                let result = state.process(&context).await;
+                if result.is_err() {
+                    warn!("Stream finished with error: {:?}", result.err().unwrap());
+                    break;
+                }
+                state = result.unwrap();
+                if state.is_finished() {
+                    break;
+                }
             }
         });
     }

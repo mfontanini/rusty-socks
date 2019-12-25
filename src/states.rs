@@ -24,6 +24,13 @@ impl State {
         State::AwaitingHello(stream)
     }
 
+    pub fn is_finished(&self) -> bool {
+        match self {
+            State::Finished => true,
+            _ => false
+        }
+    }
+
     pub async fn process(self, context: &Context) -> Result<Self, Error>
     {
         match self {
@@ -76,7 +83,6 @@ impl State {
                 SocketAddr::new(address, request.port)
             }
         };
-        println!("{:?}", endpoint);
         let output_stream = TcpStream::connect(endpoint).await?;
         let response = RequestResponse::new(
             request.version,
@@ -107,7 +113,6 @@ impl State {
         let client_to_output = copy(&mut client_read, &mut output_write);
         let output_to_client = copy(&mut output_read, &mut client_write);
         try_join!(client_to_output, output_to_client)?;
-        println!("Finished proxying");
         Ok(Self::Finished)
     }
 }
