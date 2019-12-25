@@ -3,7 +3,7 @@ use log::info;
 use futures::try_join;
 use tokio::net::TcpStream;
 use tokio::prelude::*;
-use tokio::io::{split, BufReader, BufWriter, ReadHalf, WriteHalf};
+use tokio::io::{split, ReadHalf, WriteHalf};
 use crate::context::Context;
 use crate::error::Error;
 use crate::messages::*;
@@ -94,10 +94,7 @@ impl State {
         let client_stream = response.write(client_stream).await?;
 
         let (reader, writer) = split(output_stream);
-        let output_stream = MergeIO::new(
-            BufReader::new(reader),
-            BufWriter::new(writer)
-        );
+        let output_stream = MergeIO::new(reader, writer);
         Ok(Self::Proxying(client_stream, Box::new(output_stream)))
     }
 
@@ -122,8 +119,7 @@ impl State {
 
 struct Proxier {
     reader: ReadHalf<Box<dyn ReadWriteStream>>,
-    writer: WriteHalf<Box<dyn ReadWriteStream>>,
-    buffer: [u8; 4096]
+    writer: WriteHalf<Box<dyn ReadWriteStream>>
 }
 
 impl Proxier {
@@ -134,18 +130,18 @@ impl Proxier {
     {
         Proxier {
             reader,
-            writer,
-            buffer: [0; 4096]
+            writer
         }
     }
 
     async fn run(&mut self) -> Result<(), Error> {
+        let mut buffer = [0; 4096];
         loop {
-            let bytes_read = self.reader.read(&mut self.buffer).await?;
+            let bytes_read = self.reader.read(&mut buffer).await?;
             if bytes_read == 0 {
                 return Err(Error::Finished);
             }
-            self.writer.write_all(&self.buffer[0..bytes_read]).await?;
+            self.writer.write_all(&buffer[0..bytes_read]).await?;
             self.writer.flush().await?;
         }
     } 
