@@ -5,6 +5,7 @@ pub enum Error {
     Error(String),
     MalformedMessage(String),
     Io(io::Error),
+    DnsError(String),
     Finished
 }
 

@@ -1,4 +1,4 @@
-use std::net::{SocketAddr, IpAddr, Ipv4Addr};
+use std::net::{IpAddr, Ipv4Addr};
 use log::info;
 use futures::try_join;
 use tokio::net::TcpStream;
@@ -78,13 +78,18 @@ impl State {
         if request.version != 5 {
             return Err(Error::MalformedMessage(String::from("Invalid socks version")))
         }
-        let endpoint = match request.address {
+        let output_stream = match request.address {
             Address::Ip(address) => {
-                SocketAddr::new(address, request.port)
+                let endpoint = (address, request.port);
+                info!("Establishing connection with {:?}", endpoint);
+                TcpStream::connect(endpoint).await
+            },
+            Address::Domain(ref domain) => {
+                let endpoint = (domain.as_str(), request.port);
+                info!("Establishing connection with {:?}", endpoint);
+                TcpStream::connect(endpoint).await
             }
-        };
-        info!("Establishing connection with {}", endpoint);
-        let output_stream = TcpStream::connect(endpoint).await?;
+        }?;
         let response = RequestResponse::new(
             request.version,
             ResponseCode::Success,

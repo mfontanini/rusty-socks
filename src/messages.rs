@@ -25,13 +25,15 @@ pub enum Command {
 }
 
 pub enum Address {
-    Ip(IpAddr)
+    Ip(IpAddr),
+    Domain(String)
 }
 
 #[derive(Primitive, PartialEq, Debug)]
 pub enum AddressType {
     Ipv4 = 1,
-    Ipv6 = 4
+    Domain = 3,
+    Ipv6 = 4,
 }
 
 #[derive(Copy, Clone)]
@@ -133,6 +135,17 @@ impl Parseable for ClientRequest {
                 let mut buf = [0; 16];
                 input.read_exact(&mut buf).await?;
                 Address::Ip(IpAddr::V6(Ipv6Addr::from(buf)))  
+            },
+            AddressType::Domain => {
+                let domain_length = input.read_u8().await? as usize;
+                let mut domain = Vec::with_capacity(domain_length);
+                domain.resize(domain_length, 0);
+                input.read_exact(domain.as_mut_slice()).await?;
+                let domain = String::from_utf8(domain);
+                if domain.is_err() {
+                    return Err(Error::MalformedMessage(String::from("Invalid domain")));
+                }
+                Address::Domain(domain.unwrap())
             }
         };
         let port = input.read_u16().await?;
@@ -197,6 +210,9 @@ impl Writeable for RequestResponse {
             Address::Ip(IpAddr::V6(address)) => {
                 output.write_u8(AddressType::Ipv6 as u8).await?;
                 output.write_all(&address.octets()).await?;
+            },
+            Address::Domain(ref _domain) => {
+                panic!("Domain used for bind address");
             }
         };
         output.write_u16(self.port).await?;
