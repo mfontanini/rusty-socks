@@ -9,12 +9,12 @@ use tokio::prelude::*;
 // Common types
 
 #[derive(Primitive, PartialEq, Debug, Copy, Clone)]
-pub enum Method {
+pub enum AuthenticationMethod {
     NoAuthentication = 0,
     UsernamePassword = 2
 }
 
-impl fmt::Display for Method {
+impl fmt::Display for AuthenticationMethod {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "\"{:?}\"", self)
     }
@@ -42,16 +42,33 @@ pub enum ResponseCode {
     GeneralFailure = 1
 }
 
+#[derive(Copy, Clone, Debug)]
+pub enum AuthStatusCode {
+    Success = 0,
+    Failure = 1
+}
+
 // Messages
 
 pub struct HelloRequest {
     pub version: u8,
-    pub methods: Vec<Method>
+    pub methods: Vec<AuthenticationMethod>
 }
 
 pub struct HelloResponse {
     pub version: u8,
-    pub method: Method
+    pub method: AuthenticationMethod
+}
+
+pub struct AuthRequest {
+    pub version: u8,
+    pub username: String,
+    pub password: String
+}
+
+pub struct AuthResponse {
+    pub version: u8,
+    pub status: AuthStatusCode
 }
 
 pub struct ClientRequest {
@@ -85,7 +102,24 @@ pub trait Writeable {
         T: AsyncWrite + Send + Unpin;
 }
 
-// Impls
+// Misc functions
+
+async fn read_string<T>(input: &mut T) -> Result<String, Error>
+where 
+    T: AsyncRead + Send + Unpin
+{
+    let length = input.read_u8().await? as usize;
+    let mut domain = Vec::with_capacity(length);
+    domain.resize(length, 0);
+    input.read_exact(domain.as_mut_slice()).await?;
+    let parsed_string = String::from_utf8(domain);
+    if parsed_string.is_err() {
+        return Err(Error::MalformedMessage(String::from("Invalid string in stream")));
+    }
+    Ok(parsed_string.unwrap())
+}
+
+// Request impls
 
 #[async_trait]
 impl Parseable for HelloRequest {
@@ -97,7 +131,7 @@ impl Parseable for HelloRequest {
         let method_count = input.read_u8().await?;
         let mut methods = Vec::new();
         for _i in 0..method_count {
-            let method = Method::from_u8(input.read_u8().await?);
+            let method = AuthenticationMethod::from_u8(input.read_u8().await?);
             if method.is_none() {
                 return Err(Error::MalformedMessage(String::from("Unsupported method")));
             }
@@ -137,15 +171,7 @@ impl Parseable for ClientRequest {
                 Address::Ip(IpAddr::V6(Ipv6Addr::from(buf)))  
             },
             AddressType::Domain => {
-                let domain_length = input.read_u8().await? as usize;
-                let mut domain = Vec::with_capacity(domain_length);
-                domain.resize(domain_length, 0);
-                input.read_exact(domain.as_mut_slice()).await?;
-                let domain = String::from_utf8(domain);
-                if domain.is_err() {
-                    return Err(Error::MalformedMessage(String::from("Invalid domain")));
-                }
-                Address::Domain(domain.unwrap())
+                Address::Domain(read_string(&mut input).await?)
             }
         };
         let port = input.read_u16().await?;
@@ -153,8 +179,26 @@ impl Parseable for ClientRequest {
     }
 }
 
+#[async_trait]
+impl Parseable for AuthRequest {
+    async fn new<T>(mut input: T) -> Result<(AuthRequest, T), Error>
+    where
+        T: AsyncRead + Send + Unpin
+    {
+        let version = input.read_u8().await?;
+        if version != 1 {
+            return Err(Error::Error(String::from("Unsupported auth version")));
+        }
+        let username = read_string(&mut input).await?;
+        let password = read_string(&mut input).await?;
+        Ok((AuthRequest{version, username, password}, input))
+    }
+}
+
+// Response impls
+
 impl HelloResponse {
-    pub fn new(version: u8, method: Method) -> HelloResponse {
+    pub fn new(version: u8, method: AuthenticationMethod) -> HelloResponse {
         HelloResponse{
             version,
             method
@@ -221,6 +265,28 @@ impl Writeable for RequestResponse {
     }
 }
 
+impl AuthResponse {
+    pub fn new(version: u8, status: AuthStatusCode) -> Self {
+        AuthResponse{
+            version,
+            status
+        }
+    }
+}
+
+#[async_trait]
+impl Writeable for AuthResponse {
+    async fn write<T>(&self, mut output: T) -> Result<T, Error>
+    where
+        T: AsyncWrite + Send + Unpin
+    {
+        output.write_u8(self.version).await?;
+        output.write_u8(self.status as u8).await?;
+        output.flush().await?;
+        Ok(output)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -243,13 +309,15 @@ mod tests {
     async fn hello_request_parse() {
         let message = make_message::<HelloRequest>(&[5, 2, 0, 2]).await;
         assert_eq!(message.version, 5);
-        assert_eq!(message.methods,
-                   vec!(Method::NoAuthentication, Method::UsernamePassword));
+        assert_eq!(
+            message.methods,
+            vec!(AuthenticationMethod::NoAuthentication, AuthenticationMethod::UsernamePassword)
+        );
     }
 
     #[async_test]
     async fn hello_reply_serialize() {
-        let message = HelloResponse::new(1, Method::NoAuthentication);
+        let message = HelloResponse::new(1, AuthenticationMethod::NoAuthentication);
         expect_serialization(&message, &[1, 0]).await;
     }
 }

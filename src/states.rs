@@ -1,5 +1,5 @@
 use std::net::{IpAddr, Ipv4Addr};
-use log::info;
+use log::{debug, info};
 use futures::try_join;
 use tokio::net::TcpStream;
 use tokio::prelude::*;
@@ -13,6 +13,7 @@ use crate::stream::MergeIO;
 pub enum State
 {
     AwaitingHello(Box<dyn ReadWriteStream>),
+    AwaitingAuth(Box<dyn ReadWriteStream>),
     AwaitingClientRequest(Box<dyn ReadWriteStream>),
     Proxying(Box<dyn ReadWriteStream>, Box<dyn ReadWriteStream>),
     Finished
@@ -36,6 +37,9 @@ impl State {
             State::AwaitingHello(client_stream) => {
                 State::process_await_hello(client_stream, &context).await
             },
+            State::AwaitingAuth(client_stream) => {
+                State::process_await_auth(client_stream, &context).await
+            },
             State::AwaitingClientRequest(client_stream) => {
                 State::process_await_client_request(client_stream, &context).await
             },
@@ -49,7 +53,7 @@ impl State {
         
     }
 
-    async fn process_await_hello(stream: Box<dyn ReadWriteStream>, _context: &Context)
+    async fn process_await_hello(stream: Box<dyn ReadWriteStream>, context: &Context)
         -> Result<Self, Error>
     {
         let (request, stream) = HelloRequest::new(stream).await?;
@@ -59,13 +63,39 @@ impl State {
         if request.methods.len() == 0 {
             return Err(Error::MalformedMessage(String::from("No methods provided")));
         }
-        // TODO: pick one based on context
-        let method = request.methods[0];
-        
-        info!("Received new client using auth method {}", method);
-        let response = HelloResponse::new(request.version, method);
+        let selected_method = context.select_authentication(request.methods);
+        if selected_method.is_none() {
+            return Ok(State::Finished);
+        }
+        let selected_method = selected_method.unwrap();
+        info!("Received new client using auth {}", selected_method);
+        let response = HelloResponse::new(
+            request.version,
+            selected_method
+        );
         let stream = response.write(stream).await?;
-        Ok(State::AwaitingClientRequest(stream)) 
+        match selected_method {
+            AuthenticationMethod::NoAuthentication => {
+                Ok(State::AwaitingClientRequest(stream))
+            },
+            AuthenticationMethod::UsernamePassword => {
+                Ok(State::AwaitingAuth(stream))
+            }
+        }
+    }
+
+    async fn process_await_auth(stream: Box<dyn ReadWriteStream>, context: &Context)
+        -> Result<Self, Error>
+    {
+        let (request, stream) = AuthRequest::new(stream).await?;
+        let status = match context.authenticate(&request.username, &request.password) {
+            true => AuthStatusCode::Success,
+            false => AuthStatusCode::Failure
+        };
+        debug!("Authentication request finished with status: {:?}", status);
+        let response = AuthResponse::new(request.version, status);
+        let stream = response.write(stream).await?;
+        Ok(State::AwaitingClientRequest(stream))
     }
 
     async fn process_await_client_request(

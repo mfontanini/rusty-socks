@@ -3,7 +3,7 @@ use tokio::net::TcpListener;
 use tokio::io::{BufReader, BufWriter, split};
 use rusty_socks::context::Context;
 use rusty_socks::stream::MergeIO;
-use rusty_socks::states::{State};
+use rusty_socks::states::State;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
