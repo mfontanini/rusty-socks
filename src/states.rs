@@ -8,7 +8,7 @@ use crate::context::Context;
 use crate::error::Error;
 use crate::messages::*;
 use crate::stream::ReadWriteStream;
-use crate::stream::MergeIO;
+use crate::stream::Stream;
 
 pub enum State
 {
@@ -127,10 +127,7 @@ impl State {
             0 // Port?
         );
         response.write(&mut client_stream).await?;
-
-        let (reader, writer) = split(output_stream);
-        let output_stream = MergeIO::new(reader, writer);
-        Ok(Self::Proxying(client_stream, Box::new(output_stream)))
+        Ok(Self::Proxying(client_stream, Box::new(Stream::unbuffered(output_stream))))
     }
 
     async fn do_proxy(

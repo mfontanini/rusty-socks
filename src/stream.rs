@@ -1,68 +1,104 @@
 use std::io;
-use tokio::io::{AsyncRead, AsyncWrite};
+use tokio::io::{
+    split,
+    AsyncRead,
+    AsyncWrite,
+    BufReader,
+    BufWriter,
+    ReadHalf,
+    WriteHalf
+};
+use tokio::net::TcpStream;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 
-// Based on merge-io crate, adapted to tokio::io::{AsyncRead, AsyncWrite} 
-
 pub trait ReadWriteStream: AsyncRead + AsyncWrite + Unpin + Send { }
 
-#[derive(Debug)]
-pub struct MergeIO<R, W>
-where
-    R: AsyncRead + Unpin,
-    W: AsyncWrite + Unpin,
-{
-    reader: R,
-    writer: W,
+enum StreamType {
+    Tcp(ReadHalf<TcpStream>, WriteHalf<TcpStream>),
+    BufferedTcp(BufReader<ReadHalf<TcpStream>>, BufWriter<WriteHalf<TcpStream>>)
+} 
+
+pub struct Stream {
+    stream_type: StreamType
 }
 
-impl<R, W> MergeIO<R, W>
-where
-    R: AsyncRead + Unpin,
-    W: AsyncWrite + Unpin,
-{
-    pub fn new(reader: R, writer: W) -> Self {
-        MergeIO {
-            reader: reader,
-            writer: writer
+impl Stream {
+    pub fn unbuffered(stream: TcpStream) -> Self {
+        let (reader, writer) = split(stream);
+        Stream{
+            stream_type: StreamType::Tcp(reader, writer)
+        }
+    }
+
+    pub fn buffered(stream: TcpStream) -> Self {
+        let (reader, writer) = split(stream);
+        Stream{
+            stream_type: StreamType::BufferedTcp(BufReader::new(reader), BufWriter::new(writer))
+        }
+    }
+
+    pub fn into_unbuffered(self) -> Self {
+        let (reader, writer) = match self.stream_type {
+            StreamType::Tcp(reader, writer) => (reader, writer),
+            StreamType::BufferedTcp(reader, writer) => (reader.into_inner(), writer.into_inner())
+        };
+        Stream{
+            stream_type: StreamType::Tcp(reader, writer)
         }
     }
 }
 
-impl<R, W> AsyncRead for MergeIO<R, W>
-where
-    R: AsyncRead + Unpin + Send,
-    W: AsyncWrite + Unpin + Send,
+impl AsyncRead for Stream
 {
     fn poll_read(self: Pin<&mut Self>, cx: &mut Context<'_>, buf: &mut [u8])
         -> Poll<io::Result<usize>>
     {
-        AsyncRead::poll_read(Pin::new(&mut self.get_mut().reader), cx, buf)
+        match self.get_mut().stream_type {
+            StreamType::Tcp(ref mut reader, _) => {
+                AsyncRead::poll_read(Pin::new(reader), cx, buf)
+            },
+            StreamType::BufferedTcp(ref mut reader, _) => {
+                AsyncRead::poll_read(Pin::new(reader), cx, buf)
+            }
+        }
     }
 }
 
-impl<R, W> AsyncWrite for MergeIO<R, W>
-where
-    R: AsyncRead + Unpin + Send,
-    W: AsyncWrite + Unpin + Send,
+impl AsyncWrite for Stream
 {
     fn poll_write(self: Pin<&mut Self>, cx: &mut Context<'_>, buf: &[u8]) -> Poll<io::Result<usize>> {
-        AsyncWrite::poll_write(Pin::new(&mut self.get_mut().writer), cx, buf)
+        match self.get_mut().stream_type {
+            StreamType::Tcp(_, ref mut writer) => {
+                AsyncWrite::poll_write(Pin::new(writer), cx, buf)
+            },
+            StreamType::BufferedTcp(_, ref mut writer) => {
+                AsyncWrite::poll_write(Pin::new(writer), cx, buf)
+            },
+        }
     }
 
     fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
-        AsyncWrite::poll_flush(Pin::new(&mut self.get_mut().writer), cx)
+        match self.get_mut().stream_type {
+            StreamType::Tcp(_, ref mut writer) => {
+                AsyncWrite::poll_flush(Pin::new(writer), cx)
+            },
+            StreamType::BufferedTcp(_, ref mut writer) => {
+                AsyncWrite::poll_flush(Pin::new(writer), cx)
+            },
+        }
     }
 
     fn poll_shutdown(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
-        AsyncWrite::poll_shutdown(Pin::new(&mut self.get_mut().writer), cx)
+        match self.get_mut().stream_type {
+            StreamType::Tcp(_, ref mut writer) => {
+                AsyncWrite::poll_shutdown(Pin::new(writer), cx)
+            },
+            StreamType::BufferedTcp(_, ref mut writer) => {
+                AsyncWrite::poll_shutdown(Pin::new(writer), cx)
+            },
+        }
     }
 }
 
-impl<R, W> ReadWriteStream for MergeIO<R, W>
-where
-    R: AsyncRead + Unpin + Send,
-    W: AsyncWrite + Unpin + Send
-{
-}
+impl ReadWriteStream for Stream {}
