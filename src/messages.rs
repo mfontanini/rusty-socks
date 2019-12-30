@@ -89,7 +89,7 @@ pub struct RequestResponse {
 
 #[async_trait]
 pub trait Parseable {
-    async fn new<T>(mut input: T) -> Result<(Self, T), Error>
+    async fn new<T>(input: &mut T) -> Result<Self, Error>
     where
         Self: Sized,
         T: AsyncRead + Send + Unpin;
@@ -97,7 +97,7 @@ pub trait Parseable {
 
 #[async_trait]
 pub trait Writeable {
-    async fn write<T>(&self, mut output: T) -> Result<T, Error>
+    async fn write<T>(&self, output: &mut T) -> Result<(), Error>
     where
         T: AsyncWrite + Send + Unpin;
 }
@@ -123,7 +123,7 @@ where
 
 #[async_trait]
 impl Parseable for HelloRequest {
-    async fn new<T>(mut input: T) -> Result<(HelloRequest, T), Error>
+    async fn new<T>(input: &mut T) -> Result<HelloRequest, Error>
     where
         T: AsyncRead + Send + Unpin
     {
@@ -137,13 +137,13 @@ impl Parseable for HelloRequest {
             }
             methods.push(method.unwrap());
         }
-        Ok((HelloRequest{version, methods}, input))
+        Ok(HelloRequest{version, methods})
     }
 }
 
 #[async_trait]
 impl Parseable for ClientRequest {
-    async fn new<T>(mut input: T) -> Result<(ClientRequest, T), Error>
+    async fn new<T>(input: &mut T) -> Result<ClientRequest, Error>
     where
         T: AsyncRead + Send + Unpin
     {
@@ -171,17 +171,17 @@ impl Parseable for ClientRequest {
                 Address::Ip(IpAddr::V6(Ipv6Addr::from(buf)))  
             },
             AddressType::Domain => {
-                Address::Domain(read_string(&mut input).await?)
+                Address::Domain(read_string(input).await?)
             }
         };
         let port = input.read_u16().await?;
-        Ok((ClientRequest{version, command, address, port}, input))
+        Ok(ClientRequest{version, command, address, port})
     }
 }
 
 #[async_trait]
 impl Parseable for AuthRequest {
-    async fn new<T>(mut input: T) -> Result<(AuthRequest, T), Error>
+    async fn new<T>(input: &mut T) -> Result<AuthRequest, Error>
     where
         T: AsyncRead + Send + Unpin
     {
@@ -189,9 +189,9 @@ impl Parseable for AuthRequest {
         if version != 1 {
             return Err(Error::Error(String::from("Unsupported auth version")));
         }
-        let username = read_string(&mut input).await?;
-        let password = read_string(&mut input).await?;
-        Ok((AuthRequest{version, username, password}, input))
+        let username = read_string(input).await?;
+        let password = read_string(input).await?;
+        Ok(AuthRequest{version, username, password})
     }
 }
 
@@ -208,14 +208,14 @@ impl HelloResponse {
 
 #[async_trait]
 impl Writeable for HelloResponse {
-    async fn write<T>(&self, mut output: T) -> Result<T, Error>
+    async fn write<T>(&self, output: &mut T) -> Result<(), Error>
     where
         T: AsyncWrite + Send + Unpin
     {
         output.write_u8(self.version).await?;
         output.write_u8(self.method as u8).await?;
         output.flush().await?;
-        Ok(output)
+        Ok(())
     }
 }
 
@@ -238,7 +238,7 @@ impl RequestResponse {
 
 #[async_trait]
 impl Writeable for RequestResponse {
-    async fn write<T>(&self, mut output: T) -> Result<T, Error>
+    async fn write<T>(&self, output: &mut T) -> Result<(), Error>
     where
         T: AsyncWrite + Send + Unpin
     {
@@ -261,7 +261,7 @@ impl Writeable for RequestResponse {
         };
         output.write_u16(self.port).await?;
         output.flush().await?;
-        Ok(output)
+        Ok(())
     }
 }
 
@@ -276,14 +276,14 @@ impl AuthResponse {
 
 #[async_trait]
 impl Writeable for AuthResponse {
-    async fn write<T>(&self, mut output: T) -> Result<T, Error>
+    async fn write<T>(&self, output: &mut T) -> Result<(), Error>
     where
         T: AsyncWrite + Send + Unpin
     {
         output.write_u8(self.version).await?;
         output.write_u8(self.status as u8).await?;
         output.flush().await?;
-        Ok(output)
+        Ok(())
     }
 }
 
@@ -294,14 +294,14 @@ mod tests {
     use tokio::io::{BufWriter, BufReader};
 
     async fn make_message<T: Parseable>(buffer: &[u8]) -> T {
-        let cursor = BufReader::new(buffer);
-        let (message, _) = T::new(cursor).await.unwrap();
+        let mut cursor = BufReader::new(buffer);
+        let message = T::new(&mut cursor).await.unwrap();
         message
     }
 
     async fn expect_serialization<T: Writeable>(message: &T, expected: &[u8]) {
         let mut stream = BufWriter::new(Vec::new());
-        let stream = message.write(&mut stream).await.unwrap();
+        message.write(&mut stream).await.unwrap();
         assert_eq!(stream.buffer(), expected);
     }
 

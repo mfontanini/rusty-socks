@@ -53,10 +53,10 @@ impl State {
         
     }
 
-    async fn process_await_hello(stream: Box<dyn ReadWriteStream>, context: &Context)
+    async fn process_await_hello(mut stream: Box<dyn ReadWriteStream>, context: &Context)
         -> Result<Self, Error>
     {
-        let (request, stream) = HelloRequest::new(stream).await?;
+        let request = HelloRequest::new(&mut stream).await?;
         if request.version != 5 {
             return Err(Error::MalformedMessage(format!("Unsupported socks version {}", request.version)));
         }
@@ -73,7 +73,7 @@ impl State {
             request.version,
             selected_method
         );
-        let stream = response.write(stream).await?;
+        response.write(&mut stream).await?;
         match selected_method {
             AuthenticationMethod::NoAuthentication => {
                 Ok(State::AwaitingClientRequest(stream))
@@ -84,27 +84,27 @@ impl State {
         }
     }
 
-    async fn process_await_auth(stream: Box<dyn ReadWriteStream>, context: &Context)
+    async fn process_await_auth(mut stream: Box<dyn ReadWriteStream>, context: &Context)
         -> Result<Self, Error>
     {
-        let (request, stream) = AuthRequest::new(stream).await?;
+        let request = AuthRequest::new(&mut stream).await?;
         let status = match context.authenticate(&request.username, &request.password) {
             true => AuthStatusCode::Success,
             false => AuthStatusCode::Failure
         };
         debug!("Authentication request finished with status: {:?}", status);
         let response = AuthResponse::new(request.version, status);
-        let stream = response.write(stream).await?;
+        response.write(&mut stream).await?;
         Ok(State::AwaitingClientRequest(stream))
     }
 
     async fn process_await_client_request(
-        client_stream: Box<dyn ReadWriteStream>,
+        mut client_stream: Box<dyn ReadWriteStream>,
         _context: &Context
     )
         -> Result<Self, Error>
     {
-        let (request, client_stream) = ClientRequest::new(client_stream).await?;
+        let request = ClientRequest::new(&mut client_stream).await?;
         if request.version != 5 {
             return Err(Error::MalformedMessage(String::from("Invalid socks version")))
         }
@@ -126,7 +126,7 @@ impl State {
             Address::Ip(IpAddr::V4(Ipv4Addr::from(0))),
             0 // Port?
         );
-        let client_stream = response.write(client_stream).await?;
+        response.write(&mut client_stream).await?;
 
         let (reader, writer) = split(output_stream);
         let output_stream = MergeIO::new(reader, writer);
