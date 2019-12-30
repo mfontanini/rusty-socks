@@ -128,8 +128,8 @@ impl State {
 
     async fn do_proxy(client_stream: Stream, output_stream: Stream) -> Result<Self, Error>
     {
-        let (client_reader, client_writer) = split(client_stream);
-        let (output_reader, output_writer) = split(output_stream);
+        let (client_reader, client_writer) = split(client_stream.into_unbuffered());
+        let (output_reader, output_writer) = split(output_stream.into_unbuffered());
         let mut client_proxier = Proxier::new(client_reader, output_writer);
         let mut output_proxier = Proxier::new(output_reader, client_writer);
         // We don't really care what happened, we're done anyway
