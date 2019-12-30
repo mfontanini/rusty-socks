@@ -7,20 +7,19 @@ use tokio::io::{split, ReadHalf, WriteHalf};
 use crate::context::Context;
 use crate::error::Error;
 use crate::messages::*;
-use crate::stream::ReadWriteStream;
 use crate::stream::Stream;
 
 pub enum State
 {
-    AwaitingHello(Box<dyn ReadWriteStream>),
-    AwaitingAuth(Box<dyn ReadWriteStream>),
-    AwaitingClientRequest(Box<dyn ReadWriteStream>),
-    Proxying(Box<dyn ReadWriteStream>, Box<dyn ReadWriteStream>),
+    AwaitingHello(Stream),
+    AwaitingAuth(Stream),
+    AwaitingClientRequest(Stream),
+    Proxying(Stream, Stream),
     Finished
 }
 
 impl State {
-    pub fn new(stream: Box<dyn ReadWriteStream>) -> State {
+    pub fn new(stream: Stream) -> State {
         State::AwaitingHello(stream)
     }
 
@@ -53,7 +52,7 @@ impl State {
         
     }
 
-    async fn process_await_hello(mut stream: Box<dyn ReadWriteStream>, context: &Context)
+    async fn process_await_hello(mut stream: Stream, context: &Context)
         -> Result<Self, Error>
     {
         let request = HelloRequest::new(&mut stream).await?;
@@ -84,7 +83,7 @@ impl State {
         }
     }
 
-    async fn process_await_auth(mut stream: Box<dyn ReadWriteStream>, context: &Context)
+    async fn process_await_auth(mut stream: Stream, context: &Context)
         -> Result<Self, Error>
     {
         let request = AuthRequest::new(&mut stream).await?;
@@ -98,10 +97,7 @@ impl State {
         Ok(State::AwaitingClientRequest(stream))
     }
 
-    async fn process_await_client_request(
-        mut client_stream: Box<dyn ReadWriteStream>,
-        _context: &Context
-    )
+    async fn process_await_client_request(mut client_stream: Stream, _context: &Context)
         -> Result<Self, Error>
     {
         let request = ClientRequest::new(&mut client_stream).await?;
@@ -127,14 +123,10 @@ impl State {
             0 // Port?
         );
         response.write(&mut client_stream).await?;
-        Ok(Self::Proxying(client_stream, Box::new(Stream::unbuffered(output_stream))))
+        Ok(Self::Proxying(client_stream, Stream::unbuffered(output_stream)))
     }
 
-    async fn do_proxy(
-        client_stream: Box<dyn ReadWriteStream>,
-        output_stream: Box<dyn ReadWriteStream>
-    )
-        -> Result<Self, Error>
+    async fn do_proxy(client_stream: Stream, output_stream: Stream) -> Result<Self, Error>
     {
         let (client_reader, client_writer) = split(client_stream);
         let (output_reader, output_writer) = split(output_stream);
@@ -150,15 +142,12 @@ impl State {
 }
 
 struct Proxier {
-    reader: ReadHalf<Box<dyn ReadWriteStream>>,
-    writer: WriteHalf<Box<dyn ReadWriteStream>>
+    reader: ReadHalf<Stream>,
+    writer: WriteHalf<Stream>
 }
 
 impl Proxier {
-    fn new(
-        reader: ReadHalf<Box<dyn ReadWriteStream>>,
-        writer: WriteHalf<Box<dyn ReadWriteStream>>
-    ) -> Proxier
+    fn new(reader: ReadHalf<Stream>, writer: WriteHalf<Stream>) -> Self
     {
         Proxier {
             reader,

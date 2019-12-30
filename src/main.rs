@@ -15,7 +15,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let context = Arc::clone(&context);
         tokio::spawn(async move {
             let stream = Stream::buffered(stream);
-            let mut state = State::new(Box::new(stream));
+            let mut state = State::new(stream);
             loop {
                 let result = state.process(&context).await;
                 if result.is_err() {
