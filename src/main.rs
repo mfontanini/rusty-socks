@@ -1,3 +1,4 @@
+use std::sync::Arc;
 use log::{Level, warn};
 use tokio::net::TcpListener;
 use tokio::io::{BufReader, BufWriter, split};
@@ -9,10 +10,11 @@ use rusty_socks::states::State;
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     simple_logger::init_with_level(Level::Debug).unwrap();
     let mut listener = TcpListener::bind("127.0.0.1:8080").await?;
+    let context = Arc::new(Context::new());
     loop {
         let (stream, _) = listener.accept().await?;
+        let context = Arc::clone(&context);
         tokio::spawn(async move {
-            let context = Context::new();
             let (reader, writer) = split(stream);
             let stream = MergeIO::new(
                 BufReader::new(reader),
