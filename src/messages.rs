@@ -20,9 +20,9 @@ impl fmt::Display for AuthenticationMethod {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Primitive)]
 pub enum Command {
-    Connect
+    Connect = 1
 }
 
 #[derive(Debug, PartialEq)]
@@ -149,13 +149,12 @@ impl Parseable for ClientRequest {
     where
         T: AsyncRead + Send + Unpin
     {
-        const COMMAND_CONNECT: u8 = 1;
-
         let version = input.read_u8().await?;
-        let command = match input.read_u8().await? {
-            COMMAND_CONNECT => Ok(Command::Connect),
-            value => Err(Error::MalformedMessage(format!("Unsupported command {}", value)))
-        }?;
+        let command = Command::from_u8(input.read_u8().await?);
+        if command.is_none() {
+            return Err(Error::MalformedMessage(format!("Unsupported command")));
+        }
+        let command = command.unwrap();
         // Skip reserved byte
         input.read_u8().await?;
         let address_type = AddressType::from_u8(input.read_u8().await?);
