@@ -12,8 +12,6 @@ use tokio::net::TcpStream;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 
-pub trait ReadWriteStream: AsyncRead + AsyncWrite + Unpin + Send { }
-
 enum StreamType {
     Tcp(ReadHalf<TcpStream>, WriteHalf<TcpStream>),
     BufferedTcp(BufReader<ReadHalf<TcpStream>>, BufWriter<WriteHalf<TcpStream>>)
@@ -49,8 +47,7 @@ impl Stream {
     }
 }
 
-impl AsyncRead for Stream
-{
+impl AsyncRead for Stream {
     fn poll_read(self: Pin<&mut Self>, cx: &mut Context<'_>, buf: &mut [u8])
         -> Poll<io::Result<usize>>
     {
@@ -65,9 +62,10 @@ impl AsyncRead for Stream
     }
 }
 
-impl AsyncWrite for Stream
-{
-    fn poll_write(self: Pin<&mut Self>, cx: &mut Context<'_>, buf: &[u8]) -> Poll<io::Result<usize>> {
+impl AsyncWrite for Stream {
+    fn poll_write(self: Pin<&mut Self>, cx: &mut Context<'_>, buf: &[u8])
+        -> Poll<io::Result<usize>>
+    {
         match self.get_mut().stream_type {
             StreamType::Tcp(_, ref mut writer) => {
                 AsyncWrite::poll_write(Pin::new(writer), cx, buf)
@@ -100,5 +98,3 @@ impl AsyncWrite for Stream
         }
     }
 }
-
-impl ReadWriteStream for Stream {}

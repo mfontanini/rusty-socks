@@ -19,7 +19,7 @@ pub enum State
 }
 
 impl State {
-    pub fn new(stream: Stream) -> State {
+    pub fn new(stream: Stream) -> Self {
         State::AwaitingHello(stream)
     }
 
@@ -30,8 +30,7 @@ impl State {
         }
     }
 
-    pub async fn process(self, context: &Context) -> Result<Self, Error>
-    {
+    pub async fn process(self, context: &Context) -> Result<Self, Error> {
         match self {
             State::AwaitingHello(client_stream) => {
                 State::process_await_hello(client_stream, &context).await

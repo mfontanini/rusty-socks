@@ -125,7 +125,7 @@ where
 
 #[async_trait]
 impl Parseable for HelloRequest {
-    async fn new<T>(input: &mut T) -> Result<HelloRequest, Error>
+    async fn new<T>(input: &mut T) -> Result<Self, Error>
     where
         T: AsyncRead + Send + Unpin
     {
@@ -145,7 +145,7 @@ impl Parseable for HelloRequest {
 
 #[async_trait]
 impl Parseable for ClientRequest {
-    async fn new<T>(input: &mut T) -> Result<ClientRequest, Error>
+    async fn new<T>(input: &mut T) -> Result<Self, Error>
     where
         T: AsyncRead + Send + Unpin
     {
@@ -183,7 +183,7 @@ impl Parseable for ClientRequest {
 
 #[async_trait]
 impl Parseable for AuthRequest {
-    async fn new<T>(input: &mut T) -> Result<AuthRequest, Error>
+    async fn new<T>(input: &mut T) -> Result<Self, Error>
     where
         T: AsyncRead + Send + Unpin
     {
@@ -200,7 +200,7 @@ impl Parseable for AuthRequest {
 // Response impls
 
 impl HelloResponse {
-    pub fn new(version: u8, method: AuthenticationMethod) -> HelloResponse {
+    pub fn new(version: u8, method: AuthenticationMethod) -> Self {
         HelloResponse{
             version,
             method
