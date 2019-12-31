@@ -9,8 +9,7 @@ use crate::error::Error;
 use crate::messages::*;
 use crate::stream::Stream;
 
-pub enum State
-{
+pub enum State {
     AwaitingHello(Stream),
     AwaitingAuth(Stream),
     AwaitingClientRequest(Stream),
@@ -39,7 +38,7 @@ impl State {
                 State::process_await_auth(client_stream, &context).await
             },
             State::AwaitingClientRequest(client_stream) => {
-                State::process_await_client_request(client_stream, &context).await
+                State::process_await_client_request(client_stream).await
             },
             State::Proxying(client_stream, output_stream) => {
                 State::do_proxy(client_stream, output_stream).await
@@ -96,7 +95,7 @@ impl State {
         Ok(State::AwaitingClientRequest(stream))
     }
 
-    async fn process_await_client_request(mut client_stream: Stream, _context: &Context)
+    async fn process_await_client_request(mut client_stream: Stream)
         -> Result<Self, Error>
     {
         let request = ClientRequest::new(&mut client_stream).await?;
