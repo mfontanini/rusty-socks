@@ -20,10 +20,12 @@ impl fmt::Display for AuthenticationMethod {
     }
 }
 
+#[derive(Debug, PartialEq)]
 pub enum Command {
     Connect
 }
 
+#[derive(Debug, PartialEq)]
 pub enum Address {
     Ip(IpAddr),
     Domain(String)
@@ -302,11 +304,11 @@ mod tests {
     async fn expect_serialization<T: Writeable>(message: &T, expected: &[u8]) {
         let mut stream = BufWriter::new(Vec::new());
         message.write(&mut stream).await.unwrap();
-        assert_eq!(stream.buffer(), expected);
+        assert_eq!(stream.get_ref().as_slice(), expected);
     }
 
     #[async_test]
-    async fn hello_request_parse() {
+    async fn parse_hello_request() {
         let message = make_message::<HelloRequest>(&[5, 2, 0, 2]).await;
         assert_eq!(message.version, 5);
         assert_eq!(
@@ -316,8 +318,78 @@ mod tests {
     }
 
     #[async_test]
-    async fn hello_reply_serialize() {
+    async fn parse_auth_request() {
+        let message = make_message::<AuthRequest>(&[1, 3, 102, 111, 111, 3, 98, 97, 114]).await;
+        assert_eq!(message.version, 1);
+        assert_eq!(message.username, "foo");
+        assert_eq!(message.password, "bar");
+    }
+
+    #[async_test]
+    async fn parse_client_request_connect_ipv4() {
+        let message = make_message::<ClientRequest>(&[5, 1, 0, 1, 1, 2, 3, 4, 31, 144]).await;
+        assert_eq!(message.version, 5);
+        assert_eq!(message.command, Command::Connect);
+        assert_eq!(message.address, Address::Ip("1.2.3.4".parse().unwrap()));
+        assert_eq!(message.port, 8080);
+    }
+
+    #[async_test]
+    async fn parse_client_request_connect_ipv6() {
+        let message = make_message::<ClientRequest>(
+            &[5, 1, 0, 4, 222, 173, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 190, 239, 31, 144]
+        ).await;
+        assert_eq!(message.version, 5);
+        assert_eq!(message.command, Command::Connect);
+        assert_eq!(message.address, Address::Ip("dead::beef".parse().unwrap()));
+        assert_eq!(message.port, 8080);
+    }
+
+    #[async_test]
+    async fn parse_client_request_connect_domain() {
+        let message = make_message::<ClientRequest>(
+            &[5, 1, 0, 3, 7, 102, 111, 111, 46, 99, 111, 109, 31, 144]
+        ).await;
+        assert_eq!(message.version, 5);
+        assert_eq!(message.command, Command::Connect);
+        assert_eq!(message.address, Address::Domain(String::from("foo.com")));
+        assert_eq!(message.port, 8080);
+    }
+
+    #[async_test]
+    async fn serialize_hello_reply() {
         let message = HelloResponse::new(1, AuthenticationMethod::NoAuthentication);
         expect_serialization(&message, &[1, 0]).await;
+    }
+
+    #[async_test]
+    async fn serialize_auth_response() {
+        let message = AuthResponse::new(1, AuthStatusCode::Success);
+        expect_serialization(&message, &[1, 0]).await;
+    }
+
+    #[async_test]
+    async fn serialize_request_response_ipv4() {
+        let message = RequestResponse::new(
+            1,
+            ResponseCode::Success,
+            Address::Ip("1.2.3.4".parse().unwrap()),
+            8080
+        );
+        expect_serialization(&message, &[1, 0, 0, 1, 1, 2, 3, 4, 31, 144]).await;
+    }
+
+    #[async_test]
+    async fn serialize_request_response_ipv6() {
+        let message = RequestResponse::new(
+            1,
+            ResponseCode::Success,
+            Address::Ip("dead::beef".parse().unwrap()),
+            8080
+        );
+        expect_serialization(
+            &message,
+            &[1, 0, 0, 4, 222, 173, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 190, 239, 31, 144]
+        ).await;
     }
 }
