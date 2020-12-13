@@ -107,7 +107,7 @@ pub trait Writeable {
 // Misc functions
 
 async fn read_string<T>(input: &mut T) -> Result<String, Error>
-where 
+where
     T: AsyncRead + Send + Unpin
 {
     let length = input.read_u8().await? as usize;
@@ -169,7 +169,7 @@ impl Parseable for ClientRequest {
             AddressType::Ipv6 => {
                 let mut buf = [0; 16];
                 input.read_exact(&mut buf).await?;
-                Address::Ip(IpAddr::V6(Ipv6Addr::from(buf)))  
+                Address::Ip(IpAddr::V6(Ipv6Addr::from(buf)))
             },
             AddressType::Domain => {
                 Address::Domain(read_string(input).await?)
@@ -188,7 +188,7 @@ impl Parseable for AuthRequest {
     {
         let version = input.read_u8().await?;
         if version != 1 {
-            return Err(Error::Error(String::from("Unsupported auth version")));
+            return Err(Error::Generic(String::from("Unsupported auth version")));
         }
         let username = read_string(input).await?;
         let password = read_string(input).await?;

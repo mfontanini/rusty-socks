@@ -1,16 +1,20 @@
+use thiserror::Error;
 use std::io;
 
-#[derive(Debug)]
+#[derive(Error, Debug)]
 pub enum Error {
-    Error(String),
-    MalformedMessage(String),
-    Io(io::Error),
-    DnsError(String),
-    Finished
-}
+    #[error("generic: {0}")]
+    Generic(String),
 
-impl From<io::Error> for Error {
-    fn from(e: io::Error) -> Error {
-        Error::Io(e)
-    }
+    #[error("malformed message: {0}")]
+    MalformedMessage(String),
+
+    #[error("io: {0}")]
+    Io(#[from] io::Error),
+
+    #[error("DNS: {0}")]
+    DnsError(String),
+
+    #[error("stream finished")]
+    Finished
 }
