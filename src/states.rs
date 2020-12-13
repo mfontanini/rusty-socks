@@ -47,7 +47,7 @@ impl State {
                 Err(Error::Finished)
             }
         }
-        
+
     }
 
     async fn process_await_hello(mut stream: Stream, context: &Context)
@@ -58,7 +58,7 @@ impl State {
             return Err(Error::MalformedMessage(format!("Unsupported socks version {}", request.version)));
         }
         if request.methods.len() == 0 {
-            return Err(Error::MalformedMessage(String::from("No methods provided")));
+            return Err(Error::MalformedMessage("No methods provided".into()));
         }
         let selected_method = context.select_authentication(request.methods);
         if selected_method.is_none() {
@@ -100,7 +100,7 @@ impl State {
     {
         let request = ClientRequest::new(&mut client_stream).await?;
         if request.version != 5 {
-            return Err(Error::MalformedMessage(String::from("Invalid socks version")))
+            return Err(Error::MalformedMessage("Invalid socks version".into()));
         }
         let output_stream = match request.address {
             Address::Ip(address) => {
@@ -163,5 +163,5 @@ impl Proxier {
             self.writer.write_all(&buffer[0..bytes_read]).await?;
             self.writer.flush().await?;
         }
-    } 
+    }
 }

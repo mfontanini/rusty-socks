@@ -8,11 +8,11 @@ pub struct Credentials {
 impl Credentials {
     pub fn new(username: &str, password: &str) -> Self {
         Credentials{
-            username: String::from(username),
-            password: String::from(password)
+            username: username.into(),
+            password: password.into(),
         }
     }
-} 
+}
 
 pub struct Context {
     credentials: Option<Credentials>

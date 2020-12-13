@@ -116,7 +116,7 @@ where
     input.read_exact(domain.as_mut_slice()).await?;
     let parsed_string = String::from_utf8(domain);
     if parsed_string.is_err() {
-        return Err(Error::MalformedMessage(String::from("Invalid string in stream")));
+        return Err(Error::MalformedMessage("Invalid string in stream".into()));
     }
     Ok(parsed_string.unwrap())
 }
@@ -135,7 +135,7 @@ impl Parseable for HelloRequest {
         for _i in 0..method_count {
             let method = AuthenticationMethod::from_u8(input.read_u8().await?);
             if method.is_none() {
-                return Err(Error::MalformedMessage(String::from("Unsupported method")));
+                return Err(Error::MalformedMessage("Unsupported method".into()));
             }
             methods.push(method.unwrap());
         }
@@ -152,14 +152,14 @@ impl Parseable for ClientRequest {
         let version = input.read_u8().await?;
         let command = Command::from_u8(input.read_u8().await?);
         if command.is_none() {
-            return Err(Error::MalformedMessage(format!("Unsupported command")));
+            return Err(Error::MalformedMessage("Unsupported command".into()));
         }
         let command = command.unwrap();
         // Skip reserved byte
         input.read_u8().await?;
         let address_type = AddressType::from_u8(input.read_u8().await?);
         if address_type.is_none() {
-            return Err(Error::MalformedMessage(String::from("Invalid address type")));
+            return Err(Error::MalformedMessage("Invalid address type".into()));
         }
         let address = match address_type.unwrap() {
             AddressType::Ipv4 => {
@@ -188,7 +188,7 @@ impl Parseable for AuthRequest {
     {
         let version = input.read_u8().await?;
         if version != 1 {
-            return Err(Error::Generic(String::from("Unsupported auth version")));
+            return Err(Error::Generic("Unsupported auth version".into()));
         }
         let username = read_string(input).await?;
         let password = read_string(input).await?;
@@ -351,7 +351,7 @@ mod tests {
         ).await;
         assert_eq!(message.version, 5);
         assert_eq!(message.command, Command::Connect);
-        assert_eq!(message.address, Address::Domain(String::from("foo.com")));
+        assert_eq!(message.address, Address::Domain("foo.com".into()));
         assert_eq!(message.port, 8080);
     }
 
