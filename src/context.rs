@@ -45,11 +45,9 @@ impl Context {
     }
 
     pub fn authenticate(&self, username: &str, password: &str) -> bool {
-        match self.credentials {
-            Some(ref credentials) => {
-                credentials.username == username && credentials.password == password
-            },
-            None => false
+        match &self.credentials {
+            Some(credentials) => credentials.username == username && credentials.password == password,
+            None => true,
         }
     }
 }

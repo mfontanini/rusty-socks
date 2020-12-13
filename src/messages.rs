@@ -133,11 +133,10 @@ impl Parseable for HelloRequest {
         let method_count = input.read_u8().await?;
         let mut methods = Vec::new();
         for _i in 0..method_count {
-            let method = AuthenticationMethod::from_u8(input.read_u8().await?);
-            if method.is_none() {
-                return Err(Error::MalformedMessage("Unsupported method".into()));
-            }
-            methods.push(method.unwrap());
+            match AuthenticationMethod::from_u8(input.read_u8().await?) {
+                Some(method) => methods.push(method),
+                None => return Err(Error::MalformedMessage("Unsupported method".into())),
+            };
         }
         Ok(HelloRequest{version, methods})
     }
@@ -150,18 +149,13 @@ impl Parseable for ClientRequest {
         T: AsyncRead + Send + Unpin
     {
         let version = input.read_u8().await?;
-        let command = Command::from_u8(input.read_u8().await?);
-        if command.is_none() {
-            return Err(Error::MalformedMessage("Unsupported command".into()));
-        }
-        let command = command.unwrap();
+        let command = Command::from_u8(input.read_u8().await?)
+            .ok_or_else(|| Error::MalformedMessage("Unsupported command".into()))?;
         // Skip reserved byte
         input.read_u8().await?;
-        let address_type = AddressType::from_u8(input.read_u8().await?);
-        if address_type.is_none() {
-            return Err(Error::MalformedMessage("Invalid address type".into()));
-        }
-        let address = match address_type.unwrap() {
+        let address_type = AddressType::from_u8(input.read_u8().await?)
+            .ok_or_else(|| Error::MalformedMessage("Invalid address type".into()))?;
+        let address = match address_type {
             AddressType::Ipv4 => {
                 let addr = input.read_u32().await?;
                 Address::Ip(IpAddr::V4(Ipv4Addr::from(addr)))

@@ -60,11 +60,10 @@ impl State {
         if request.methods.len() == 0 {
             return Err(Error::MalformedMessage("No methods provided".into()));
         }
-        let selected_method = context.select_authentication(request.methods);
-        if selected_method.is_none() {
-            return Ok(State::Finished);
-        }
-        let selected_method = selected_method.unwrap();
+        let selected_method = match context.select_authentication(request.methods) {
+            Some(method) => method,
+            None => return Ok(State::Finished),
+        };
         info!("Received new client using auth {}", selected_method);
         let response = HelloResponse::new(
             request.version,
