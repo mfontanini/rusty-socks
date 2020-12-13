@@ -45,7 +45,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         exit(1);
     }
     let config = load_config(&args[1]);
-    let mut listener = TcpListener::bind(&config.endpoint).await?;
+    let listener = TcpListener::bind(&config.endpoint).await?;
     let context = match config.credentials {
         Some(c) => {
             info!("Using credentials: {}:xxx", c.username);
