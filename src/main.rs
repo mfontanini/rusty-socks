@@ -1,24 +1,24 @@
+use log::{info, warn, Level};
+use rusty_socks::context::{Context, Credentials};
+use rusty_socks::states::State;
+use rusty_socks::stream::Stream;
+use serde::Deserialize;
 use std::env;
 use std::fs;
 use std::process::exit;
 use std::sync::Arc;
-use log::{Level, info, warn};
 use tokio::net::TcpListener;
-use serde::Deserialize;
-use rusty_socks::context::{Context, Credentials};
-use rusty_socks::stream::Stream;
-use rusty_socks::states::State;
 
 #[derive(Deserialize)]
 struct Config {
     endpoint: String,
-    credentials: Option<ConfigCredentials>
+    credentials: Option<ConfigCredentials>,
 }
 
 #[derive(Deserialize)]
 struct ConfigCredentials {
     username: String,
-    password: String
+    password: String,
 }
 
 fn load_config(filename: &str) -> Config {
@@ -41,7 +41,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     simple_logger::init_with_level(Level::Debug).unwrap();
     let args: Vec<String> = env::args().collect();
     if args.len() != 2 {
-        eprintln!("Usage: {:} <toml-file-path>", args.get(0).map(|s| s.as_str()).unwrap_or("rusty-socks"));
+        eprintln!(
+            "Usage: {:} <toml-file-path>",
+            args.get(0).map(|s| s.as_str()).unwrap_or("rusty-socks")
+        );
         exit(1);
     }
     let config = load_config(&args[1]);
@@ -50,7 +53,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Some(c) => {
             info!("Using credentials: {}:xxx", c.username);
             Context::with_credentials(Credentials::new(&c.username, &c.password))
-        },
+        }
         None => {
             info!("Using no authentication");
             Context::new()

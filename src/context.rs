@@ -2,12 +2,12 @@ use crate::messages::AuthenticationMethod;
 
 pub struct Credentials {
     username: String,
-    password: String
+    password: String,
 }
 
 impl Credentials {
     pub fn new(username: &str, password: &str) -> Self {
-        Credentials{
+        Credentials {
             username: username.into(),
             password: password.into(),
         }
@@ -15,28 +15,27 @@ impl Credentials {
 }
 
 pub struct Context {
-    credentials: Option<Credentials>
+    credentials: Option<Credentials>,
 }
 
 impl Context {
-	pub fn new() -> Self {
-		Context{
-            credentials: None
-        }
-	}
+    pub fn new() -> Self {
+        Context { credentials: None }
+    }
 
     pub fn with_credentials(credentials: Credentials) -> Self {
-        Context{
-            credentials: Some(credentials)
+        Context {
+            credentials: Some(credentials),
         }
     }
 
-    pub fn select_authentication(&self, methods: Vec<AuthenticationMethod>)
-        -> Option<AuthenticationMethod>
-    {
+    pub fn select_authentication(
+        &self,
+        methods: Vec<AuthenticationMethod>,
+    ) -> Option<AuthenticationMethod> {
         let expected_method = match self.credentials {
             Some(_) => AuthenticationMethod::UsernamePassword,
-            None => AuthenticationMethod::NoAuthentication
+            None => AuthenticationMethod::NoAuthentication,
         };
         if methods.contains(&expected_method) {
             return Some(expected_method);
@@ -46,7 +45,9 @@ impl Context {
 
     pub fn authenticate(&self, username: &str, password: &str) -> bool {
         match &self.credentials {
-            Some(credentials) => credentials.username == username && credentials.password == password,
+            Some(credentials) => {
+                credentials.username == username && credentials.password == password
+            }
             None => true,
         }
     }

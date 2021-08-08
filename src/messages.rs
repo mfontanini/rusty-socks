@@ -1,9 +1,9 @@
+use crate::error::Error;
+use async_trait::async_trait;
+use num_traits::FromPrimitive;
 use std::fmt;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 use tokio::io::{AsyncRead, AsyncWrite};
-use async_trait::async_trait;
-use num_traits::FromPrimitive;
-use crate::error::Error;
 use tokio::prelude::*;
 
 // Common types
@@ -11,7 +11,7 @@ use tokio::prelude::*;
 #[derive(Primitive, PartialEq, Debug, Copy, Clone)]
 pub enum AuthenticationMethod {
     NoAuthentication = 0,
-    UsernamePassword = 2
+    UsernamePassword = 2,
 }
 
 impl fmt::Display for AuthenticationMethod {
@@ -22,13 +22,13 @@ impl fmt::Display for AuthenticationMethod {
 
 #[derive(Debug, PartialEq, Primitive)]
 pub enum Command {
-    Connect = 1
+    Connect = 1,
 }
 
 #[derive(Debug, PartialEq)]
 pub enum Address {
     Ip(IpAddr),
-    Domain(String)
+    Domain(String),
 }
 
 #[derive(Primitive, PartialEq, Debug)]
@@ -41,50 +41,50 @@ pub enum AddressType {
 #[derive(Copy, Clone)]
 pub enum ResponseCode {
     Success = 0,
-    GeneralFailure = 1
+    GeneralFailure = 1,
 }
 
 #[derive(Copy, Clone, Debug)]
 pub enum AuthStatusCode {
     Success = 0,
-    Failure = 1
+    Failure = 1,
 }
 
 // Messages
 
 pub struct HelloRequest {
     pub version: u8,
-    pub methods: Vec<AuthenticationMethod>
+    pub methods: Vec<AuthenticationMethod>,
 }
 
 pub struct HelloResponse {
     pub version: u8,
-    pub method: AuthenticationMethod
+    pub method: AuthenticationMethod,
 }
 
 pub struct AuthRequest {
     pub version: u8,
     pub username: String,
-    pub password: String
+    pub password: String,
 }
 
 pub struct AuthResponse {
     pub version: u8,
-    pub status: AuthStatusCode
+    pub status: AuthStatusCode,
 }
 
 pub struct ClientRequest {
     pub version: u8,
     pub command: Command,
     pub address: Address,
-    pub port: u16
+    pub port: u16,
 }
 
 pub struct RequestResponse {
     pub version: u8,
     pub response_code: ResponseCode,
     pub bind_address: Address,
-    pub port: u16
+    pub port: u16,
 }
 
 // Traits
@@ -108,7 +108,7 @@ pub trait Writeable {
 
 async fn read_string<T>(input: &mut T) -> Result<String, Error>
 where
-    T: AsyncRead + Send + Unpin
+    T: AsyncRead + Send + Unpin,
 {
     let length = input.read_u8().await? as usize;
     let mut domain = Vec::with_capacity(length);
@@ -127,7 +127,7 @@ where
 impl Parseable for HelloRequest {
     async fn new<T>(input: &mut T) -> Result<Self, Error>
     where
-        T: AsyncRead + Send + Unpin
+        T: AsyncRead + Send + Unpin,
     {
         let version = input.read_u8().await?;
         let method_count = input.read_u8().await?;
@@ -138,7 +138,7 @@ impl Parseable for HelloRequest {
                 None => return Err(Error::MalformedMessage("Unsupported method".into())),
             };
         }
-        Ok(HelloRequest{version, methods})
+        Ok(HelloRequest { version, methods })
     }
 }
 
@@ -146,7 +146,7 @@ impl Parseable for HelloRequest {
 impl Parseable for ClientRequest {
     async fn new<T>(input: &mut T) -> Result<Self, Error>
     where
-        T: AsyncRead + Send + Unpin
+        T: AsyncRead + Send + Unpin,
     {
         let version = input.read_u8().await?;
         let command = Command::from_u8(input.read_u8().await?)
@@ -159,18 +159,21 @@ impl Parseable for ClientRequest {
             AddressType::Ipv4 => {
                 let addr = input.read_u32().await?;
                 Address::Ip(IpAddr::V4(Ipv4Addr::from(addr)))
-            },
+            }
             AddressType::Ipv6 => {
                 let mut buf = [0; 16];
                 input.read_exact(&mut buf).await?;
                 Address::Ip(IpAddr::V6(Ipv6Addr::from(buf)))
-            },
-            AddressType::Domain => {
-                Address::Domain(read_string(input).await?)
             }
+            AddressType::Domain => Address::Domain(read_string(input).await?),
         };
         let port = input.read_u16().await?;
-        Ok(ClientRequest{version, command, address, port})
+        Ok(ClientRequest {
+            version,
+            command,
+            address,
+            port,
+        })
     }
 }
 
@@ -178,7 +181,7 @@ impl Parseable for ClientRequest {
 impl Parseable for AuthRequest {
     async fn new<T>(input: &mut T) -> Result<Self, Error>
     where
-        T: AsyncRead + Send + Unpin
+        T: AsyncRead + Send + Unpin,
     {
         let version = input.read_u8().await?;
         if version != 1 {
@@ -186,7 +189,11 @@ impl Parseable for AuthRequest {
         }
         let username = read_string(input).await?;
         let password = read_string(input).await?;
-        Ok(AuthRequest{version, username, password})
+        Ok(AuthRequest {
+            version,
+            username,
+            password,
+        })
     }
 }
 
@@ -194,10 +201,7 @@ impl Parseable for AuthRequest {
 
 impl HelloResponse {
     pub fn new(version: u8, method: AuthenticationMethod) -> Self {
-        HelloResponse{
-            version,
-            method
-        }
+        HelloResponse { version, method }
     }
 }
 
@@ -205,7 +209,7 @@ impl HelloResponse {
 impl Writeable for HelloResponse {
     async fn write<T>(&self, output: &mut T) -> Result<(), Error>
     where
-        T: AsyncWrite + Send + Unpin
+        T: AsyncWrite + Send + Unpin,
     {
         output.write_u8(self.version).await?;
         output.write_u8(self.method as u8).await?;
@@ -219,14 +223,13 @@ impl RequestResponse {
         version: u8,
         response_code: ResponseCode,
         bind_address: Address,
-        port: u16)
-        -> RequestResponse
-    {
-        RequestResponse{
+        port: u16,
+    ) -> RequestResponse {
+        RequestResponse {
             version,
             response_code,
             bind_address,
-            port
+            port,
         }
     }
 }
@@ -235,7 +238,7 @@ impl RequestResponse {
 impl Writeable for RequestResponse {
     async fn write<T>(&self, output: &mut T) -> Result<(), Error>
     where
-        T: AsyncWrite + Send + Unpin
+        T: AsyncWrite + Send + Unpin,
     {
         output.write_u8(self.version).await?;
         output.write_u8(self.response_code as u8).await?;
@@ -245,11 +248,11 @@ impl Writeable for RequestResponse {
             Address::Ip(IpAddr::V4(address)) => {
                 output.write_u8(AddressType::Ipv4 as u8).await?;
                 output.write_all(&address.octets()).await?;
-            },
+            }
             Address::Ip(IpAddr::V6(address)) => {
                 output.write_u8(AddressType::Ipv6 as u8).await?;
                 output.write_all(&address.octets()).await?;
-            },
+            }
             Address::Domain(ref _domain) => {
                 panic!("Domain used for bind address");
             }
@@ -262,10 +265,7 @@ impl Writeable for RequestResponse {
 
 impl AuthResponse {
     pub fn new(version: u8, status: AuthStatusCode) -> Self {
-        AuthResponse{
-            version,
-            status
-        }
+        AuthResponse { version, status }
     }
 }
 
@@ -273,7 +273,7 @@ impl AuthResponse {
 impl Writeable for AuthResponse {
     async fn write<T>(&self, output: &mut T) -> Result<(), Error>
     where
-        T: AsyncWrite + Send + Unpin
+        T: AsyncWrite + Send + Unpin,
     {
         output.write_u8(self.version).await?;
         output.write_u8(self.status as u8).await?;
@@ -286,7 +286,7 @@ impl Writeable for AuthResponse {
 mod tests {
     use super::*;
     use futures_await_test::async_test;
-    use tokio::io::{BufWriter, BufReader};
+    use tokio::io::{BufReader, BufWriter};
 
     async fn make_message<T: Parseable>(buffer: &[u8]) -> T {
         let mut cursor = BufReader::new(buffer);
@@ -306,7 +306,10 @@ mod tests {
         assert_eq!(message.version, 5);
         assert_eq!(
             message.methods,
-            vec!(AuthenticationMethod::NoAuthentication, AuthenticationMethod::UsernamePassword)
+            vec!(
+                AuthenticationMethod::NoAuthentication,
+                AuthenticationMethod::UsernamePassword
+            )
         );
     }
 
@@ -329,9 +332,10 @@ mod tests {
 
     #[async_test]
     async fn parse_client_request_connect_ipv6() {
-        let message = make_message::<ClientRequest>(
-            &[5, 1, 0, 4, 222, 173, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 190, 239, 31, 144]
-        ).await;
+        let message = make_message::<ClientRequest>(&[
+            5, 1, 0, 4, 222, 173, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 190, 239, 31, 144,
+        ])
+        .await;
         assert_eq!(message.version, 5);
         assert_eq!(message.command, Command::Connect);
         assert_eq!(message.address, Address::Ip("dead::beef".parse().unwrap()));
@@ -340,9 +344,10 @@ mod tests {
 
     #[async_test]
     async fn parse_client_request_connect_domain() {
-        let message = make_message::<ClientRequest>(
-            &[5, 1, 0, 3, 7, 102, 111, 111, 46, 99, 111, 109, 31, 144]
-        ).await;
+        let message = make_message::<ClientRequest>(&[
+            5, 1, 0, 3, 7, 102, 111, 111, 46, 99, 111, 109, 31, 144,
+        ])
+        .await;
         assert_eq!(message.version, 5);
         assert_eq!(message.command, Command::Connect);
         assert_eq!(message.address, Address::Domain("foo.com".into()));
@@ -367,7 +372,7 @@ mod tests {
             1,
             ResponseCode::Success,
             Address::Ip("1.2.3.4".parse().unwrap()),
-            8080
+            8080,
         );
         expect_serialization(&message, &[1, 0, 0, 1, 1, 2, 3, 4, 31, 144]).await;
     }
@@ -378,11 +383,14 @@ mod tests {
             1,
             ResponseCode::Success,
             Address::Ip("dead::beef".parse().unwrap()),
-            8080
+            8080,
         );
         expect_serialization(
             &message,
-            &[1, 0, 0, 4, 222, 173, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 190, 239, 31, 144]
-        ).await;
+            &[
+                1, 0, 0, 4, 222, 173, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 190, 239, 31, 144,
+            ],
+        )
+        .await;
     }
 }
