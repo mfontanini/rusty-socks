@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::io;
 use thiserror::Error;
 
@@ -7,7 +8,7 @@ pub enum Error {
     Generic(String),
 
     #[error("malformed message: {0}")]
-    MalformedMessage(String),
+    MalformedMessage(Cow<'static, str>),
 
     #[error("io: {0}")]
     Io(#[from] io::Error),

@@ -47,10 +47,9 @@ impl State {
     async fn process_await_hello(mut stream: Stream, context: &Context) -> Result<Self, Error> {
         let request = HelloRequest::new(&mut stream).await?;
         if request.version != 5 {
-            return Err(Error::MalformedMessage(format!(
-                "Unsupported socks version {}",
-                request.version
-            )));
+            return Err(Error::MalformedMessage(
+                format!("Unsupported socks version {}", request.version).into(),
+            ));
         }
         if request.methods.is_empty() {
             return Err(Error::MalformedMessage("No methods provided".into()));
