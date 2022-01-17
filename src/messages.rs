@@ -104,21 +104,26 @@ pub trait Writeable {
         T: AsyncWrite + Send + Unpin;
 }
 
-// Misc functions
+// Allow reading strings from an AsyncRead
 
-async fn read_string<T>(input: &mut T) -> Result<String, Error>
-where
-    T: AsyncRead + Send + Unpin,
-{
-    let length = input.read_u8().await? as usize;
-    let mut domain = Vec::with_capacity(length);
-    domain.resize(length, 0);
-    input.read_exact(domain.as_mut_slice()).await?;
-    let parsed_string = String::from_utf8(domain);
-    if parsed_string.is_err() {
-        return Err(Error::MalformedMessage("Invalid string in stream".into()));
+#[async_trait]
+trait ReadString {
+    async fn read_string(&mut self) -> Result<String, Error>;
+}
+
+#[async_trait]
+impl<T: AsyncRead + Send + Unpin> ReadString for T {
+    async fn read_string(&mut self) -> Result<String, Error> {
+        let length = self.read_u8().await? as usize;
+        let mut domain = Vec::with_capacity(length);
+        domain.resize(length, 0);
+        self.read_exact(domain.as_mut_slice()).await?;
+        let parsed_string = String::from_utf8(domain);
+        if parsed_string.is_err() {
+            return Err(Error::MalformedMessage("Invalid string in stream".into()));
+        }
+        Ok(parsed_string.unwrap())
     }
-    Ok(parsed_string.unwrap())
 }
 
 // Request impls
@@ -165,7 +170,7 @@ impl Parseable for ClientRequest {
                 input.read_exact(&mut buf).await?;
                 Address::Ip(IpAddr::V6(Ipv6Addr::from(buf)))
             }
-            AddressType::Domain => Address::Domain(read_string(input).await?),
+            AddressType::Domain => Address::Domain(input.read_string().await?),
         };
         let port = input.read_u16().await?;
         Ok(ClientRequest {
@@ -187,8 +192,8 @@ impl Parseable for AuthRequest {
         if version != 1 {
             return Err(Error::Generic("Unsupported auth version".into()));
         }
-        let username = read_string(input).await?;
-        let password = read_string(input).await?;
+        let username = input.read_string().await?;
+        let password = input.read_string().await?;
         Ok(AuthRequest {
             version,
             username,
