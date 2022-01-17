@@ -56,7 +56,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         None => {
             info!("Using no authentication");
-            Context::new()
+            Context::default()
         }
     };
     let context = Arc::new(context);

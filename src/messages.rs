@@ -115,8 +115,7 @@ trait ReadString {
 impl<T: AsyncRead + Send + Unpin> ReadString for T {
     async fn read_string(&mut self) -> Result<String, Error> {
         let length = self.read_u8().await? as usize;
-        let mut domain = Vec::with_capacity(length);
-        domain.resize(length, 0);
+        let mut domain = vec![0; length];
         self.read_exact(domain.as_mut_slice()).await?;
         let parsed_string = String::from_utf8(domain);
         if parsed_string.is_err() {

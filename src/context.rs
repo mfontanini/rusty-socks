@@ -14,15 +14,12 @@ impl Credentials {
     }
 }
 
+#[derive(Default)]
 pub struct Context {
     credentials: Option<Credentials>,
 }
 
 impl Context {
-    pub fn new() -> Self {
-        Context { credentials: None }
-    }
-
     pub fn with_credentials(credentials: Credentials) -> Self {
         Context {
             credentials: Some(credentials),

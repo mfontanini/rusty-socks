@@ -23,19 +23,16 @@ impl State {
     }
 
     pub fn is_finished(&self) -> bool {
-        match self {
-            State::Finished => true,
-            _ => false,
-        }
+        matches!(self, State::Finished)
     }
 
     pub async fn process(self, context: &Context) -> Result<Self, Error> {
         match self {
             State::AwaitingHello(client_stream) => {
-                State::process_await_hello(client_stream, &context).await
+                State::process_await_hello(client_stream, context).await
             }
             State::AwaitingAuth(client_stream) => {
-                State::process_await_auth(client_stream, &context).await
+                State::process_await_auth(client_stream, context).await
             }
             State::AwaitingClientRequest(client_stream) => {
                 State::process_await_client_request(client_stream).await
@@ -55,7 +52,7 @@ impl State {
                 request.version
             )));
         }
-        if request.methods.len() == 0 {
+        if request.methods.is_empty() {
             return Err(Error::MalformedMessage("No methods provided".into()));
         }
         let selected_method = match context.select_authentication(request.methods) {
